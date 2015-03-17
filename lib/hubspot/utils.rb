@@ -11,7 +11,12 @@ module Hubspot
       # Turns a hash into the hubspot properties format
       def hash_to_properties(hash, opts = {})
         key_name = opts[:key_name] || "property"
-        hash.map{ |k,v| { key_name => k.to_s, "value" => v}}
+        hash.map do |k,v|
+          {
+            key_name => k.to_s,
+            "value" => v.to_s
+          }
+        end
       end
     end
   end

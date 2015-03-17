@@ -6,17 +6,19 @@ module Hubspot
   #
   # TODO: work on all endpoints that can specify contact properties, property mode etc... as params. cf pending specs
   class Contact
-    CREATE_CONTACT_PATH        = "/contacts/v1/contact"
-    GET_CONTACT_BY_EMAIL_PATH  = "/contacts/v1/contact/email/:contact_email/profile"
-    GET_CONTACTS_BY_EMAIL_PATH = "/contacts/v1/contact/emails/batch"
-    GET_CONTACT_BY_ID_PATH     = "/contacts/v1/contact/vid/:contact_id/profile"
-    CONTACT_BATCH_PATH         = '/contacts/v1/contact/vids/batch'
-    GET_CONTACT_BY_UTK_PATH    = "/contacts/v1/contact/utk/:contact_utk/profile"
-    GET_CONTACTS_BY_UTK_PATH   = '/contacts/v1/contact/utks/batch'
-    UPDATE_CONTACT_PATH        = "/contacts/v1/contact/vid/:contact_id/profile"
-    DESTROY_CONTACT_PATH       = "/contacts/v1/contact/vid/:contact_id"
-    CONTACTS_PATH              = "/contacts/v1/lists/all/contacts/all"
-    RECENT_CONTACTS_PATH       = '/contacts/v1/lists/recently_updated/contacts/recent'
+    CREATE_CONTACT_PATH           = "/contacts/v1/contact"
+    CREATE_OR_UPDATE_CONTACT_PATH = "/contacts/v1/contact/createOrUpdate/email/:contact_email"
+    CREATE_OR_UPDATE_BATCH_CONTACT_PATH = "/contacts/v1/contact/batch"
+    GET_CONTACT_BY_EMAIL_PATH     = "/contacts/v1/contact/email/:contact_email/profile"
+    GET_CONTACTS_BY_EMAIL_PATH    = "/contacts/v1/contact/emails/batch"
+    GET_CONTACT_BY_ID_PATH        = "/contacts/v1/contact/vid/:contact_id/profile"
+    CONTACT_BATCH_PATH            = '/contacts/v1/contact/vids/batch'
+    GET_CONTACT_BY_UTK_PATH       = "/contacts/v1/contact/utk/:contact_utk/profile"
+    GET_CONTACTS_BY_UTK_PATH      = '/contacts/v1/contact/utks/batch'
+    UPDATE_CONTACT_PATH           = "/contacts/v1/contact/vid/:contact_id/profile"
+    DESTROY_CONTACT_PATH          = "/contacts/v1/contact/vid/:contact_id"
+    CONTACTS_PATH                 = "/contacts/v1/lists/all/contacts/all"
+    RECENT_CONTACTS_PATH          = '/contacts/v1/lists/recently_updated/contacts/recent'
 
     class << self
       # {https://developers.hubspot.com/docs/methods/contacts/create_contact}
@@ -27,14 +29,41 @@ module Hubspot
         new(response)
       end
 
+      def create_or_update!(payload, params={})
+        case payload
+        when String then create_or_update_single!(payload, params)
+        when Hash then create_or_update_batch!(payload)
+        else raise Hubspot::InvalidParams, 'expecting String or Hash parameter'
+        end
+      end
+
+      # {https://developers.hubspot.com/docs/methods/contacts/create_or_update}
+      def create_or_update_single!(email, params={})
+        params_with_email = params.stringify_keys.merge("email" => email)
+        post_data = {properties: Hubspot::Utils.hash_to_properties(params_with_email)}
+        Hubspot::Connection.post_json(CREATE_OR_UPDATE_CONTACT_PATH, params: {contact_email: email}, body: post_data)
+      end
+
+      def create_or_update_batch!(params)
+        raise Hubspot::InvalidParams, 'expecting Hash parameter' unless params.is_a?(Hash)
+        post_data = []
+        params.each do |email, props|
+          post_data << {
+            email: email,
+            properties: Hubspot::Utils.hash_to_properties(props)
+          }
+        end
+        Hubspot::Connection.post_json(CREATE_OR_UPDATE_BATCH_CONTACT_PATH, params: {}, body: post_data)
+      end
+
       # {https://developers.hubspot.com/docs/methods/contacts/get_contacts}
       # {https://developers.hubspot.com/docs/methods/contacts/get_recently_updated_contacts}
       def all(opts={})
-        recent = opts.delete(:recent) { false } 
-        path, opts = 
-        if recent 
-          [RECENT_CONTACTS_PATH, Hubspot::ContactProperties.add_default_parameters(opts)] 
-        else 
+        recent = opts.delete(:recent) { false }
+        path, opts =
+        if recent
+          [RECENT_CONTACTS_PATH, Hubspot::ContactProperties.add_default_parameters(opts)]
+        else
           [CONTACTS_PATH, opts]
         end
 
@@ -75,14 +104,14 @@ module Hubspot
         if batch_mode
           #TODO: transform response
           response
-        else 
+        else
           new(response)
         end
       end
 
       # NOTE: problem with batch api endpoint
       # {https://developers.hubspot.com/docs/methods/contacts/get_contact_by_utk}
-      # {https://developers.hubspot.com/docs/methods/contacts/get_batch_by_utk} 
+      # {https://developers.hubspot.com/docs/methods/contacts/get_batch_by_utk}
       def find_by_utk(utks)
         batch_mode, path, params = case utks
         when String then [false, GET_CONTACT_BY_UTK_PATH, { contact_utk: utks }]
